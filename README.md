@@ -1,17 +1,17 @@
 
-# 🧠 Proyecto Final APO3
+# Proyecto Final APO3
 **Universidad Icesi – 2025-2**  
 **Curso:** Algoritmos y Programación III  
 **Entrega 1 – Análisis Exploratorio de Datos (EDA)**  
 
-## 🎯 Objetivo General
+## Objetivo General
 
 Desarrollar una herramienta capaz de **analizar actividades humanas específicas** (caminar hacia la cámara, caminar hacia atrás, girar, sentarse y levantarse) mediante el seguimiento de **landmarks corporales** detectados con **MediaPipe**.  
 El propósito del sistema es apoyar el monitoreo de **movilidad en adultos mayores**, clasificando sus movimientos en tiempo real.
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 .
@@ -59,7 +59,7 @@ El script `process.py` recorre todas las carpetas de acciones dentro de `data/ra
 * **`datosmediapipe.csv`** → 33 landmarks de MediaPipe (x, y, z, visibility) por frame.
 * **`datos_analisis.csv`** → Información general de los frames: duración, FPS, luminancia, movimiento, etc.
 
-### ▶️ Ejecución:
+### Ejecución:
 
 ```bash
 python src/process.py
@@ -72,7 +72,7 @@ python src/process.py
 * `--min_detection_confidence` → Confianza mínima para detección de pose.
 * `--min_tracking_confidence` → Confianza mínima para seguimiento.
 
-📦 Al finalizar, se crearán los CSV en `data/processed/`.
+Al finalizar, se crearán los CSV en `data/processed/`.
 
 ---
 
