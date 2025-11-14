@@ -1,42 +1,59 @@
-
 # Proyecto Final APO3
-**Universidad Icesi – 2025-2**  
-**Curso:** Algoritmos y Programación III  
-**Entrega 1 – Análisis Exploratorio de Datos (EDA)**  
+
+**Universidad Icesi – 2025-2**
+**Curso: Algoritmos y Programación III**
+
+**Entregas 1 y 2 – EDA y Modelado**
+
+---
 
 ## Objetivo General
 
-Desarrollar una herramienta capaz de **analizar actividades humanas específicas** (caminar hacia la cámara, caminar hacia atrás, girar, sentarse y levantarse) mediante el seguimiento de **landmarks corporales** detectados con **MediaPipe**.  
-El propósito del sistema es apoyar el monitoreo de **movilidad en adultos mayores**, clasificando sus movimientos en tiempo real.
+Desarrollar una herramienta capaz de analizar actividades humanas específicas (*caminar hacia la cámara, caminar hacia atrás, girar, sentarse y levantarse*) mediante el seguimiento de *landmarks* corporales detectados con **MediaPipe**.
+
+El propósito del sistema es apoyar el monitoreo de movilidad en adultos mayores, clasificando sus movimientos en tiempo real.
 
 ---
 
 ## Estructura del Proyecto
 
-```
+```text
 .
 │
 ├── data/
 │   ├── raw/
 │   │   └── videos/
 │   │       ├── caminar-adelante/
-│   │       ├── caminar-atras/
-│   │       ├── girar/
-│   │       ├── sentarse/
-│   │       └── pararse/
+│   │       ├── ... (4 acciones más)
 │   │
 │   └── processed/
 │       ├── datos_analisis.csv
-│       └── datosmediapipe.csv
+│       ├── datosmediapipe.csv
+│       └── model_features.csv
 │
-├── src/
-│   ├── process.py        # Script de extracción de landmarks y métricas de video
-│   └── eda.py (o EDA.ipynb)  # Notebook de análisis exploratorio de los datos
+├── models/
+│   ├── best_random_forest_model.joblib
+│   ├── best_xgboost_model.joblib
+│   └── label_encoder.joblib
+│
+├── notebooks/
+│   └── EDA.ipynb
+│
 ├── reports/
 │   ├── APO3_Informe_Entrega1.pdf
+│   ├── APO3_Informe_Entrega2.pdf
+│   ├── confusion_matrix_random_forest.png
+│   ├── confusion_matrix_xgboost.png
+│   └── feature_importance_rf_(componentes_pca).png
+│
+├── src/
+│   ├── process.py                 # (Paso 1) Extrae landmarks de videos a CSV
+│   ├── feature_engineering.py     # (Paso 2) Crea características (ángulos) desde CSV
+│   └── model_training.py          # (Paso 3) Entrena modelos con PCA y guarda en .joblib
+│
+├── requirements.txt
 └── README.md
-
-````
+```
 
 ---
 
@@ -44,100 +61,139 @@ El propósito del sistema es apoyar el monitoreo de **movilidad en adultos mayor
 
 Asegúrate de tener instalado **Python 3.10+** y las siguientes dependencias:
 
-```bash
-pip install -r requirements
-````
+> Se recomienda crear un entorno virtual:
 
-*(Recomendado: crear un entorno virtual con `python -m venv venv` y activarlo antes de instalar)*
+```bash
+python -m venv venv
+# (Windows)
+venv\Scripts\activate
+# (macOS / Linux)
+source venv/bin/activate
+```
+
+Instalación rápida:
+
+```bash
+pip install opencv-python-headless mediapipe pandas numpy tqdm
+pip install scikit-learn xgboost matplotlib seaborn joblib
+```
+
+> También puedes usar el archivo `requirements.txt`.
 
 ---
 
-## 1. Generación de Datos con `process.py`
+## Flujo de Trabajo y Ejecución
 
-El script `process.py` recorre todas las carpetas de acciones dentro de `data/raw/videos/`, analiza los videos y genera dos archivos CSV:
+El proyecto se ejecuta en **3 pasos** principales para pasar de los videos en crudo a un modelo entrenado.
 
-* **`datosmediapipe.csv`** → 33 landmarks de MediaPipe (x, y, z, visibility) por frame.
-* **`datos_analisis.csv`** → Información general de los frames: duración, FPS, luminancia, movimiento, etc.
+### Paso 1: Extracción de Landmarks (`process.py`)
 
-### Ejecución:
+Este script recorre todos los videos en `data/raw/videos/`, extrae los **33 landmarks** de MediaPipe de cada *frame* y genera dos archivos CSV en `data/processed/`:
+
+* `datosmediapipe.csv`: Datos *wide-format* con las coordenadas (`x, y, z, vis`) de los 33 landmarks por *frame*.
+* `datos_analisis.csv`: Metadatos de los videos (duración, luminancia, etc.).
+
+**Ejecución:**
 
 ```bash
 python src/process.py
 ```
 
-**Parámetros opcionales:**
+---
 
-* `--stride N` → Procesa cada N fotogramas (para acelerar el análisis).
-* `--static_image_mode` → Modo estático (más preciso, más lento).
-* `--min_detection_confidence` → Confianza mínima para detección de pose.
-* `--min_tracking_confidence` → Confianza mínima para seguimiento.
+### Paso 2: Ingeniería de Características (`feature_engineering.py`)
 
-Al finalizar, se crearán los CSV en `data/processed/`.
+Este script toma `datosmediapipe.csv` y prepara el dataset para el modelo:
+
+* **Normalización:** Centra la pose usando la cadera y escala usando la distancia de los hombros.
+* **Cálculo de Ángulos:** Calcula 8 ángulos corporales clave (codos, hombros, caderas, rodillas).
+* **Aplanamiento:** Combina ángulos y coordenadas normalizadas en un vector de **107 características**.
+
+**Ejecución:**
+
+```bash
+python src/feature_engineering.py
+```
+
+**Salida:** `data/processed/model_features.csv`
 
 ---
 
-## 2. Análisis Exploratorio (EDA)
+### Paso 3: Entrenamiento de Modelos (`model_training.py`)
 
-El notebook `EDA.ipynb` analiza los dos datasets generados:
+Script para entrenar y evaluar modelos de *Machine Learning*.
 
-### Contenidos principales:
+* Carga `model_features.csv`.
+* Codifica etiquetas de texto (ej. `sentarse`) a números.
+* Construye un **Pipeline** de Scikit-learn que incluye:
 
-1. **Carga y validación de datos**
+  * `StandardScaler`
+  * `PCA` (95% de varianza)
+  * Clasificador (**Random Forest** o **XGBoost**)
+* Usa `GridSearchCV` para mejores hiperparámetros.
+* Evalúa en un *hold-out* de **30%**.
 
-   * Tamaño de los datasets y tipos de variables.
-   * Conteo de valores nulos.
-2. **Análisis de metadatos de video (`datos_analisis.csv`)**
+**Ejecución:**
 
-   * Balance de clases (número de videos y frames por acción).
-   * Distribución de duraciones de video y luminancia media.
-   * Validación de condiciones homogéneas de grabación.
-3. **Análisis de landmarks (`datosmediapipe.csv`)**
+```bash
+python src/model_training.py
+```
 
-   * Evaluación de visibilidad promedio de los 33 puntos.
-   * Ejemplos visuales del esqueleto humano (MediaPipe).
-   * Distribuciones de posición de caderas y rodillas por acción.
-4. **Conclusiones y próximos pasos**
+**Salidas:**
 
-   * Confirmación de calidad y balance de datos.
-   * Identificación de características clave (`hip_y_avg`).
-   * Recomendaciones para ingeniería de características y modelado supervisado.
-
-
-## 3. Resultados Principales
-
-* Dataset **balanceado** entre las 5 clases de acción.
-* **Alta calidad** de detección (visibilidad promedio ≈ 0.9).
-* Claras diferencias en la posición vertical de caderas entre *sentarse* y *pararse*.
-* Luminancia y duración de videos **controladas** (homogeneidad experimental).
+* Modelos (`.joblib`) en `models/`.
+* Gráficos (`.png`) en `reports/`.
+* Reportes de clasificación en la terminal.
 
 ---
 
-## 4. Aspectos Éticos
+## 4. Análisis Exploratorio (EDA)
 
-* Se garantiza el **consentimiento informado** y el **uso exclusivo académico** de las grabaciones.
-* Las imágenes se almacenan en carpetas locales seguras, no en servicios en la nube.
-* El modelo se diseñará para minimizar sesgos (edad, género, iluminación, vestimenta).
+El notebook `notebooks/EDA.ipynb` contiene el análisis exploratorio inicial (Entrega 1) que validó la calidad de los datos y la viabilidad del proyecto.
 
+* Dataset balanceado (**18 videos por clase**).
+* Alta calidad de detección (**visibilidad promedio > 0.9**).
+* Clara separabilidad de clases (ej. posición de la cadera).
 
-## Próximos Pasos
+---
 
-1. **Ingeniería de características:**
+## 5. Resultados del Modelo (Entrega 2)
 
-   * Cálculo de ángulos, velocidades y distancias entre articulaciones.
-2. **Entrenamiento de modelos supervisados:**
+> *(Pega aquí los resultados finales de tus modelos. Ejemplo):*
 
-   * Comparar desempeño entre Random Forest, SVM y XGBoost.
-3. **Evaluación de rendimiento:**
+Ambos modelos alcanzaron un rendimiento excelente en el conjunto de prueba:
 
-   * Métricas: Accuracy, Precision, Recall y F1-Score.
-4. **Despliegue:**
+* **Random Forest:** *Accuracy* de **96.69%**
+* **XGBoost:** *Accuracy* de **96.26%**
 
-   * Interfaz simple para visualizar resultados en tiempo real con MediaPipe.
+Las matrices de confusión (guardadas en `reports/`) muestran que la mayoría de los errores ocurren entre clases lógicamente similares (ej. *caminar-adelante* vs *caminar-atras*), lo cual es esperado.
 
+---
 
-**Autoras:**
+## 6. Próximos Pasos (Despliegue)
 
-> Mariana Agudelo Salazar y Natalia Vargas
-> Universidad Icesi – Facultad Barberi de Ingeniería, Diseño y Ciencias Aplicadas
-> Departamento de Computación y Sistemas Inteligentes
+Siguiente paso: usar los modelos guardados en `models/` para crear una aplicación **en tiempo real**.
 
+* Crear `src/real_time_inference.py`.
+* El script:
+
+  * Carga la cámara web con **OpenCV**.
+  * Carga el *pipeline* `.joblib` (ej. `best_random_forest_model.joblib`).
+  * En un bucle, captura *frames*, aplica la misma función `extract_features` y usa el *pipeline* para predecir la acción.
+  * Muestra la predicción en pantalla con `cv2.putText()`.
+
+---
+
+## 7. Aspectos Éticos
+
+* Se garantiza el **consentimiento informado** y el uso **exclusivamente académico** de las grabaciones.
+* Las imágenes se almacenan en **carpetas locales seguras**, no en servicios en la nube.
+* El modelo se diseña para **minimizar sesgos** (edad, género, iluminación, vestimenta).
+
+---
+
+## Autoras
+
+**Mariana Agudelo Salazar** y **Natalia Vargas**
+Universidad Icesi – Facultad Barberi de Ingeniería, Diseño y Ciencias Aplicadas
+Departamento de Computación y Sistemas Inteligentes
